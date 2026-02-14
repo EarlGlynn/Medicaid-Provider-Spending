@@ -14,7 +14,7 @@ The RStudio notebook in this repository shows how to read the CSV file and extra
 
 # Overall Stats
 
-<img src="Overall-Summary.jpg" alt="Overall Summary Stats" style="width:25%; height:auto;">
+<img src="Overall-Summary.jpg" alt="Overall Summary Stats" style="width:80%; height:auto;">
 
 The file has 227,083,361 spending records from 18,825,564,012 claims that total over $1 trillion from 617,503 billing providers from 1,627,362 servicing providers.
 
@@ -25,7 +25,7 @@ These stats can be broken down by HCPCS code, but descriptions were not availabl
 
 Here are the "top 20" HCPCS codes with descriptions.
 
-<img src="Overall-Summary.jpg" alt="Overall Summary Stats" style="width:25%; height:auto;">
+<img src="Top-20-by-HCPCS-Code.jpg" alt="Summary Stats by HCPCS code" style="width:80%; height:auto;">
 
 THe descriptions in italics were found using Google searches.
 
@@ -34,7 +34,7 @@ THe descriptions in italics were found using Google searches.
 
 A density plot `Total Paid` for the 227,083,361 records is shown below.
 
-<img src="Distribution-Total-Paid-1.png" alt="Overall Summary Stats" style="width:25%; height:auto;">
+<img src="Distribution-Total-Paid-1.png" alt="Overall Summary Stats" style="width:80%; height:auto;">
 
 Each line in the file typically represents about $1 million in spending, but at least one line was as much as $118 million.
 
