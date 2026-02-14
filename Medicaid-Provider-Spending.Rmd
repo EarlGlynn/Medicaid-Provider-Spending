@@ -1,0 +1,318 @@
+---
+title: "Medicaid Provider Spending"
+author: "Earl F Glynn<br><small>watchdoglab.substack.com/</small>"
+date: "<small>`r Sys.Date()`</small>"
+output:
+  html_document:
+    code_download: true
+    theme: cerulean
+    toc: yes
+    toc_depth:  3
+    toc_float:
+      collapsed:  yes
+      smooth_scroll: yes
+    number_sections: yes
+    code_folding:  show
+---
+
+[`HHS//OPENDATA`](https://opendata.hhs.gov/datasets/medicaid-provider-spending/)
+
+Provider-level Medicaid spending data from T-MSIS, aggregated by billing or servicing provider, procedure code, and month. Covers fee-for-service, managed care, and CHIP claims from 2018-2024.
+
+This dataset contains provider-level Medicaid spending data aggregated from outpatient and professional claims with valid HCPCS codes, covering January 2018 through December 2024. It provides insights into how Medicaid dollars are distributed across providers and procedures nationwide.
+
+
+```{r setup, echo = FALSE}
+# http://biostat.mc.vanderbilt.edu/wiki/Main/KnitrHtmlTemplate
+require(Hmisc)    # provides knitrSet and other functions
+knitrSet(lang = 'markdown',   # If using blogdown: knitrSet(lang='blogdown')
+         fig.align = 'left',
+         w = 6.5,
+         h = 4.5,
+         cache = FALSE)
+```
+
+`r hidingTOC(buttonLabel = "Outline")`
+
+```{r startYourEngines, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  comment = NA)
+
+time.1 <- Sys.time()
+```
+
+# Setup {.tabset .tabset-fade .tabset-pills}
+
+## {.active}
+
+## Constants
+
+```{r}
+EXCEL_LIMIT <- 2^20
+```
+
+```{r}
+plotCaptionLeft  <- "HHS//OPEN DATA"
+plotCaptionRight <- paste("watchdoglab.substack.com", format(Sys.time(), "%Y-%m-%d"))
+```
+
+## Packages
+
+```{r Packages}
+library(tidyverse)
+library(lubridate)
+```
+
+Display formatting
+
+```{r Display}
+library(kableExtra)  # kable_styling
+```
+
+I/O
+
+```{r IO}
+library(readxl)      # read_xlsx
+library(readr)       # write_csv
+library(writexl)     # write_xlsx
+```
+
+ Graphics
+
+```{r Graphics}
+library(scales)      # comma, comma_format
+```
+
+Utilities
+
+```{r Utilities}
+library(downloader)  # download
+library(tools)       # md5sum
+```
+
+## ggplot theme
+
+[ggplot Themes Gallery](https://www.datanovia.com/en/blog/ggplot-themes-gallery/)
+
+```{r ggplotTheme}
+theme_set(theme_minimal() +
+
+          theme(axis.text             = element_text(size = 10),
+                axis.title            = element_text(size = 14),
+
+                legend.position       = "bottom",
+
+                plot.caption          = element_text(hjust = c(0.0,1.0),
+                                                     size = 10),
+                plot.caption.position = "plot",
+
+                plot.title.position   = "plot",
+
+                strip.background      = element_rect(fill = "aliceblue"),
+                strip.text            = element_text(size = 14),
+
+                title                 = element_text(size = 14)))
+
+COLOR_BAR     <- "skyblue"
+COLOR_OUTLINE <- "grey80"
+```
+
+## Helper functions
+
+```{r Helpers}
+Show <- function(data, caption="", bigMark="",
+                 height = NULL, width = NULL, ...)
+{
+  data                                       |>
+  kable("html", caption=caption,
+        format.args=list(big.mark=bigMark))  |>
+  kable_styling(bootstrap_options=c("striped", "bordered", "condensed"),
+                position="left",
+                full_width=FALSE, ...)       |>
+  scroll_box(height = height, width = width)
+}
+```
+
+# Read Medicaid Provider Spending data
+
+```{r}
+spending <- read_csv("medicaid-provider-spending.csv", col_types = "cccciid")
+nrow(spending)
+```
+
+```{r}
+glimpse(spending)
+```
+
+# Overall summary stats
+
+```{r}
+options(scipen = 999)
+spendingStats <- 
+  spending    |>
+  summarize(
+             Records              = n(),
+            `Billing Providers`   = n_distinct(BILLING_PROVIDER_NPI_NUM, na.rm = TRUE),
+            `Servicing Providers` = n_distinct(SERVICING_PROVIDER_NPI_NUM, na.rm = TRUE),
+            `HCPCS Codes`         = n_distinct(HCPCS_CODE, na.rm = TRUE),
+            
+            `First Month`         = min(CLAIM_FROM_MONTH,  na.rm = TRUE),
+            `Last Month`          = max(CLAIM_FROM_MONTH,  na.rm = TRUE),
+            
+            `Low Beneficiaries`   = min(TOTAL_UNIQUE_BENEFICIARIES, na.rm = TRUE),
+            `High Beneficiaries`  = max(TOTAL_UNIQUE_BENEFICIARIES, na.rm = TRUE),
+            
+            `Low Claims`          = min(TOTAL_CLAIMS, na.rm = TRUE),
+            `High Claims`         = max(TOTAL_CLAIMS, na.rm = TRUE),
+            `Total Claims`        = sum(TOTAL_CLAIMS, na.rm = TRUE),
+            
+            `Low Paid`            = min(TOTAL_PAID, na.rm = TRUE),
+            `High Paid`           = max(TOTAL_PAID, na.rm = TRUE),
+            `Total Paid`          = sum(TOTAL_PAID, na.rm = TRUE)
+           )
+
+spendingStats |> Show(bigMark = ",")
+```
+
+```{r}
+write_xlsx(spendingStats, "First-Look-Medicaid-Provider-Spending-Overall-Stats.xlsx")
+```
+
+# Stats by HCPCS_CODE 
+
+```{r}
+HCPCSstats <- 
+  spending |>
+  group_by(HCPCS_CODE)            |>
+  summarize(
+             Records              = n(),
+            `Billing Providers`   = n_distinct(BILLING_PROVIDER_NPI_NUM, na.rm = TRUE),
+            `Servicing Providers` = n_distinct(SERVICING_PROVIDER_NPI_NUM, na.rm = TRUE),
+            
+            `First Month`         = min(CLAIM_FROM_MONTH,  na.rm = TRUE),
+            `Last Month`          = max(CLAIM_FROM_MONTH,  na.rm = TRUE),
+            
+            `Low Beneficiaries`   = min(TOTAL_UNIQUE_BENEFICIARIES, na.rm = TRUE),
+            `High Beneficiaries`  = max(TOTAL_UNIQUE_BENEFICIARIES, na.rm = TRUE),
+            
+            `Low Claims`          = min(TOTAL_CLAIMS, na.rm = TRUE),
+            `High Claims`         = max(TOTAL_CLAIMS, na.rm = TRUE),
+            `Total Claims`        = sum(TOTAL_CLAIMS, na.rm = TRUE),
+            
+            `Low Paid`            = min(TOTAL_PAID, na.rm = TRUE),
+            `High Paid`           = max(TOTAL_PAID, na.rm = TRUE),
+            `Total Paid`          = sum(TOTAL_PAID, na.rm = TRUE)
+           )
+
+nrow(HCPCSstats)
+```
+
+## Text for HCPCS_CODEs
+
+A [`List of CPT/HCPCS Codes` is online at CMS.gov](https://www.cms.gov/medicare/coding-billing/healthcare-common-procedure-system/quarterly-update).
+
+I grabbed the `hcpc2026_jan_anweb_01122026.zip` file and extracted `HCPC2026_JAN_ANWEB_01122026.xlsx` for use here.
+
+
+## Add descriptions to stats
+
+```{r}
+HCPCScodes <- 
+  read_xlsx("HCPC2026_JAN_ANWEB_01122026.xlsx",
+            guess_max = EXCEL_LIMIT) |>
+  select(HCPC, `SHORT DESCRIPTION`, `LONG DESCRIPTION`)
+```
+
+Unclear why fewer codes found in the "master list" than in the data file.
+
+```{r}
+glimpse(HCPCScodes)
+```
+
+
+```{r}
+HCPCSstats <-
+  HCPCSstats |>
+  left_join(HCPCScodes, by = c("HCPCS_CODE" = "HCPC")) |>
+  relocate(`SHORT DESCRIPTION`, `LONG DESCRIPTION`, .after = HCPCS_CODE) |>
+  arrange(-`Total Paid`) 
+```
+
+
+## Top 25 HCPCS Codes
+
+```{r}
+HCPCSstats |>
+  arrange(-`Total Paid`)  |>
+  head(25)                |>
+  Show(bigMark = ",")
+```
+
+Write full list by HCPCS code to Excel file.
+
+```{r}
+write_xlsx(HCPCSstats, "First-Look-Medicaid-Provider-ByHCPCS-stats.xlsx")
+```
+
+# Distribution of `TOTAL PAID` 
+
+Across all raw records
+
+```{r Distribution-Total-Paid, fig.width = 8, fig.height = 6}
+ggplot(spending     |> 
+       mutate(
+           millions = TOTAL_PAID / 1E6,
+         )          |>
+       head(100000), 
+       aes(x = millions, y=..density..))                                       + 
+  geom_histogram(fill = COLOR_BAR, colour = COLOR_OUTLINE, bins=100)           +
+  geom_density()                                                               +
+  scale_x_log10(breaks=c(0.5, 1, 2.5, 5, 10, 25, 50, 100))   +
+  labs(
+        title=paste0("Distribution of `TOTAL_PAID'"),
+        subtitle = paste0("Medicaid Provider Spending [", 
+                          comma(nrow(spending)), 
+                          " rows]"),
+        x = "`TOTAL_PAID` [$Millions] Per Data Row",
+        y = "Density",
+        caption = c(
+                     "HHS//OPENDATA  2026-02-08",
+                     paste("efg", format(time.1, "%Y-%m-%d"))      
+                   )
+      )
+       
+```
+
+
+# Next step
+
+[Download the latest NPI files](https://download.cms.gov/nppes/NPI_Files.html).  
+
+The version 2 file is "new and improved" and have some wider field limits.
+
+The NPI numbers can be used to identify state and address information for the providers and suppliers.
+
+
+# Epilog {.tabset .tabset-fade .tabset-pills}
+
+## {.active}
+
+## Session Info
+
+```{r devtoolsSessionInfo}
+devtools::session_info()
+```
+
+</div>
+
+```{r epilogDeltaTime, echo=FALSE}
+time.2 <- Sys.time()
+processingTime <- paste("Processing time:", sprintf("%.1f",
+                        as.numeric(difftime(time.2,
+                                            time.1, units="secs"))), "secs\n")
+```
+
+`r processingTime`
+`r format(time.2, "%Y-%m-%d %H%M")`
+
